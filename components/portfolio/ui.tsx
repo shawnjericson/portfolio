@@ -17,7 +17,7 @@ type BNode = { keys: number[]; kids: BNode[]; leaf: boolean; x: number; y: numbe
 
 export function TreeBackground() {
   const ref = useRef<HTMLCanvasElement>(null)
-  const footHover = useRef(0)
+  const hover = useRef(0)
 
   useEffect(() => {
     const cv = ref.current
@@ -27,12 +27,17 @@ export function TreeBackground() {
     if (reduced()) return
 
     const ORDER = 4, MAXK = ORDER - 1
-    const node = (leaf: boolean): BNode => ({ keys: [], kids: [], leaf, x: 0, y: 0, tx: 0, ty: 0 })
-    let root = node(true), nkeys = 0
-    let hi: BNode[] | null = null, hiUntil = 0
+    const mk = (leaf: boolean): BNode => ({ keys: [], kids: [], leaf, x: 0, y: 0, tx: 0, ty: 0 })
+
+    /* Hai cây độc lập, mỗi cây sống trong một dải lề. */
+    type Tree = { root: BNode; n: number; hi: BNode[] | null; until: number; s: number; cell: number; bh: number }
+    const trees: Tree[] = [
+      { root: mk(true), n: 0, hi: null, until: 0, s: 1, cell: 17, bh: 20 },
+      { root: mk(true), n: 0, hi: null, until: 0, s: 1, cell: 17, bh: 20 },
+    ]
 
     const splitChild = (par: BNode, i: number) => {
-      const full = par.kids[i], mid = MAXK >> 1, right = node(full.leaf), up = full.keys[mid]
+      const full = par.kids[i], mid = MAXK >> 1, right = mk(full.leaf), up = full.keys[mid]
       right.keys = full.keys.slice(mid + 1); full.keys = full.keys.slice(0, mid)
       if (!full.leaf) { right.kids = full.kids.slice(mid + 1); full.kids = full.kids.slice(0, mid + 1) }
       right.x = full.x; right.y = full.y
@@ -46,14 +51,14 @@ export function TreeBackground() {
       if (n.kids[i].keys.length === MAXK) { splitChild(n, i); if (k > n.keys[i]) i++ }
       insNonFull(n.kids[i], k)
     }
-    const insert = (k: number) => {
-      if (root.keys.length === MAXK) {
-        const s = node(false); s.kids.push(root); s.x = root.x; s.y = root.y; splitChild(s, 0); root = s
+    const insert = (t: Tree, k: number) => {
+      if (t.root.keys.length === MAXK) {
+        const s = mk(false); s.kids.push(t.root); s.x = t.root.x; s.y = t.root.y; splitChild(s, 0); t.root = s
       }
-      insNonFull(root, k); nkeys++
+      insNonFull(t.root, k); t.n++
     }
-    const search = (k: number) => {
-      const path: BNode[] = []; let n: BNode | undefined = root
+    const search = (t: Tree, k: number) => {
+      const path: BNode[] = []; let n: BNode | undefined = t.root
       while (n) { path.push(n)
         let i = 0; while (i < n.keys.length && k > n.keys[i]) i++
         if (i < n.keys.length && n.keys[i] === k) return path
@@ -73,7 +78,7 @@ export function TreeBackground() {
     }
     window.addEventListener("resize", resize); resize()
 
-    let TRGB = "150,52,20", TOP = 0.085
+    let TRGB = "150,52,20", TOP = 0.2
     const readTone = () => {
       const cs = getComputedStyle(document.documentElement)
       TRGB = (cs.getPropertyValue("--tree-rgb") || TRGB).trim()
@@ -81,23 +86,33 @@ export function TreeBackground() {
     }
     readTone()
 
-    const layout = () => {
+    /* Cây nằm ngang: gốc sát nội dung, cành mở dần ra mép màn hình.
+       Sâu dần theo chiều ngang, anh em xếp dọc — vừa khít một dải lề cao và hẹp. */
+    const layout = (t: Tree, x0: number, x1: number, dir: number) => {
       const levels: BNode[][] = [], leaves: BNode[] = []
       const walk = (n: BNode, d: number) => {
         (levels[d] = levels[d] || []).push(n)
         if (n.leaf) leaves.push(n); else n.kids.forEach((c) => walk(c, d + 1))
       }
-      walk(root, 0)
-      const padX = W * 0.08, usable = W - padX * 2
-      leaves.forEach((n, i) => { n.tx = padX + usable * ((i + 0.5) / leaves.length) })
+      walk(t.root, 0)
+
+      const usable = Math.max(90, x1 - x0), pitch = usable / levels.length
+      t.s = Math.max(0.6, Math.min(1, (pitch - 6) / 60))
+      t.cell = 17 * t.s; t.bh = 20 * t.s
+
+      const anchor = dir > 0 ? x0 : x1
+      levels.forEach((row, d) => row.forEach((n) => { n.tx = anchor + dir * pitch * (d + 0.5) }))
+
+      const lp = Math.max(26, Math.min(98, (H - 190) / Math.max(1, leaves.length)))
+      const top = (H - lp * (leaves.length - 1)) / 2
+      leaves.forEach((n, i) => { n.ty = top + i * lp })
       for (let d = levels.length - 2; d >= 0; d--)
         levels[d].forEach((n) => {
-          n.tx = n.kids.length ? n.kids.reduce((s, c) => s + c.tx, 0) / n.kids.length : W / 2
+          n.ty = n.kids.length ? n.kids.reduce((s, c) => s + c.ty, 0) / n.kids.length : H / 2
         })
-      const top = H * 0.2, gap = Math.min(112, (H * 0.56) / Math.max(1, levels.length - 1))
-      levels.forEach((row, d) => row.forEach((n) => { n.ty = top + d * gap }))
       return levels
     }
+
     const rr = (x: number, y: number, w: number, h: number, r: number) => {
       ctx.beginPath()
       ctx.moveTo(x + r, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r)
@@ -106,53 +121,82 @@ export function TreeBackground() {
       ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath()
     }
 
-    let raf = 0, lastIns = 0, lastQ = 0, boost = 0
-    for (let i = 0; i < 9; i++) insert(Math.floor(Math.random() * 900) + 100)
+    const draw = (t: Tree, x0: number, x1: number, dir: number, boost: number) => {
+      const levels = layout(t, x0, x1, dir), base = TOP + boost * 0.4, s = t.s, bh = t.bh
+      levels.forEach((row) => row.forEach((n) => {
+        if (!n.x && !n.y) { n.x = n.tx; n.y = n.ty }
+        else { n.x += (n.tx - n.x) * 0.12; n.y += (n.ty - n.y) * 0.12 }
+      }))
+      const nw = (n: BNode) => Math.max(1, n.keys.length) * t.cell + 9 * s
+
+      levels.forEach((row) => row.forEach((n) => n.kids.forEach((c) => {
+        const on = !!t.hi && t.hi.indexOf(n) >= 0 && t.hi.indexOf(c) >= 0
+        const px = n.x + dir * nw(n) / 2, cx = c.x - dir * nw(c) / 2, mx = (px + cx) / 2
+        ctx.strokeStyle = `rgba(${TRGB},${on ? 0.72 + boost * 0.22 : base * 0.55})`
+        ctx.lineWidth = on ? 1.3 : 1
+        ctx.beginPath(); ctx.moveTo(px, n.y)
+        ctx.bezierCurveTo(mx, n.y, mx, c.y, cx, c.y); ctx.stroke()
+      })))
+
+      const mono = getComputedStyle(document.documentElement).getPropertyValue("--font-mono") || "monospace"
+      ctx.font = `${(9 * s).toFixed(1)}px ${mono}, monospace`
+      ctx.textAlign = "center"; ctx.textBaseline = "middle"
+      levels.forEach((row) => row.forEach((n) => {
+        const w = nw(n), on = !!t.hi && t.hi.indexOf(n) >= 0
+        const x = n.x - w / 2, y = n.y - bh / 2, k = n.keys.length
+        rr(x, y, w, bh, 5 * s)
+        ctx.fillStyle = `rgba(${TRGB},${on ? 0.2 + boost * 0.12 : base * 0.1})`; ctx.fill()
+        ctx.strokeStyle = `rgba(${TRGB},${on ? 0.88 : base})`
+        ctx.lineWidth = on ? 1.3 : 1; ctx.stroke()
+        if (!k) return
+        ctx.strokeStyle = `rgba(${TRGB},${base * 0.45})`; ctx.lineWidth = 1
+        for (let i = 1; i < k; i++) {
+          const vx = x + w * i / k
+          ctx.beginPath(); ctx.moveTo(vx, y + 3); ctx.lineTo(vx, y + bh - 3); ctx.stroke()
+        }
+        ctx.fillStyle = `rgba(${TRGB},${on ? 0.92 : base * 1.5 + boost * 0.3})`
+        for (let j = 0; j < k; j++) ctx.fillText(String(n.keys[j]), x + w * (j + 0.5) / k, n.y + 0.5)
+      }))
+    }
+
+    let raf = 0, lastIns = 0, lastQ = 0, boost = 0, turn = 0
+    trees.forEach((t) => { for (let i = 0; i < 7; i++) insert(t, Math.floor(Math.random() * 900) + 100) })
 
     const frame = (now: number) => {
       raf = requestAnimationFrame(frame)
-      if (now - lastIns > 1500) {
-        lastIns = now
-        if (nkeys > 30) { root = node(true); nkeys = 0; hi = null }
-        else insert(Math.floor(Math.random() * 900) + 100)
-      }
-      if (now - lastQ > 5200 && nkeys > 6) {
-        lastQ = now
-        const ks = allKeys(root)
-        hi = search(ks[Math.floor(Math.random() * ks.length)]); hiUntil = now + 2100
-      }
-      if (hi && now > hiUntil) hi = null
-      boost += (footHover.current - boost) * 0.07
 
-      const levels = layout(), base = TOP + boost * 0.42
+      /* Chỉ vẽ khi màn đủ rộng để có lề hai bên. Màn hẹp thì thôi. */
+      const content = Math.min(1180, W - 44)
+      const gutter = (W - content) / 2
       ctx.clearRect(0, 0, W, H)
-      levels.forEach((row) => row.forEach((n) => { n.x += (n.tx - n.x) * 0.11; n.y += (n.ty - n.y) * 0.11 }))
-      ctx.lineWidth = 1
-      levels.forEach((row) => row.forEach((n) => n.kids.forEach((c) => {
-        const on = !!hi && hi.indexOf(n) >= 0 && hi.indexOf(c) >= 0
-        ctx.strokeStyle = `rgba(${TRGB},${on ? 0.62 + boost * 0.3 : base * 0.72})`
-        ctx.beginPath(); ctx.moveTo(n.x, n.y + 11); ctx.lineTo(c.x, c.y - 11); ctx.stroke()
-      })))
-      ctx.font = `10px ${getComputedStyle(document.documentElement).getPropertyValue("--font-mono") || "monospace"}, monospace`
-      ctx.textAlign = "center"; ctx.textBaseline = "middle"
-      levels.forEach((row) => row.forEach((n) => {
-        const w = Math.max(26, n.keys.length * 22), on = !!hi && hi.indexOf(n) >= 0
-        rr(n.x - w / 2, n.y - 11, w, 22, 6)
-        ctx.fillStyle = `rgba(${TRGB},${on ? 0.16 + boost * 0.14 : base * 0.1})`; ctx.fill()
-        ctx.strokeStyle = `rgba(${TRGB},${on ? 0.8 + boost * 0.2 : base})`
-        ctx.lineWidth = on ? 1.4 : 1; ctx.stroke()
-        /* số chỉ hiện khi người xem rê xuống chân trang */
-        if (boost > 0.15) {
-          ctx.fillStyle = `rgba(${TRGB},${boost * (on ? 0.9 : 0.5)})`
-          ctx.fillText(n.keys.join(" "), n.x, n.y + 0.5)
+      if (gutter < 148) return
+
+      if (now - lastIns > 1600) {
+        lastIns = now
+        const t = trees[turn++ % 2]
+        if (t.n > (gutter > 280 ? 26 : 16)) {
+          t.root = mk(true); t.n = 0; t.hi = null
+          for (let r = 0; r < 6; r++) insert(t, Math.floor(Math.random() * 900) + 100)
         }
-      }))
+        else insert(t, Math.floor(Math.random() * 900) + 100)
+      }
+      if (now - lastQ > 4200) {
+        lastQ = now
+        const t = trees[Math.floor(Math.random() * 2)]
+        if (t.n > 5) { const ks = allKeys(t.root); t.hi = search(t, ks[Math.floor(Math.random() * ks.length)]); t.until = now + 2200 }
+      }
+      trees.forEach((t) => { if (t.hi && now > t.until) t.hi = null })
+      boost += (hover.current - boost) * 0.07
+
+      draw(trees[0], 6, gutter - 14, -1, boost)
+      draw(trees[1], W - gutter + 14, W - 6, 1, boost)
     }
     raf = requestAnimationFrame(frame)
 
+    /* Cả hai cây sáng lên khi con trỏ xuống tới chân trang. Không ghi chú gì cả. */
     const foot = document.getElementById("foot")
-    const on = () => { footHover.current = 1 }
-    const off = () => { footHover.current = 0 }
+    const on = () => { hover.current = 1 }
+    const off = () => { hover.current = 0 }
     foot?.addEventListener("mouseenter", on)
     foot?.addEventListener("mouseleave", off)
 

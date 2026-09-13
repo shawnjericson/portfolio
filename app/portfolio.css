@@ -13,7 +13,7 @@
   --blobA:#FF8A4C; --blobB:#FF5E5B; --blobC:#FFB03A; --blobD:#FF7043;
   --blob-op:.62; --blob-blur:105px;
   --scrim:radial-gradient(130% 88% at 50% -8%, rgba(255,247,240,0), rgba(255,247,240,.34) 55%, rgba(255,247,240,.66) 100%);
-  --tree-rgb:150,52,20; --tree-op:.085;
+  --tree-rgb:150,52,20; --tree-op:.26;
   --code-ink:#3A1B11; --btn-ink:#FFF3EC;
 }
 *{box-sizing:border-box}
@@ -25,9 +25,7 @@ body{
   -webkit-font-smoothing:antialiased;
 }
 #bg{position:fixed; inset:0; z-index:0; pointer-events:none}
-#tree{position:absolute; inset:0; width:100%; height:100%;
-  -webkit-mask-image:linear-gradient(to bottom,#000 0,#000 38%,transparent 72%);
-  mask-image:linear-gradient(to bottom,#000 0,#000 38%,transparent 72%)}
+#tree{position:absolute; inset:0; width:100%; height:100%}
 .blob{position:absolute; border-radius:50%; filter:blur(var(--blob-blur)); opacity:var(--blob-op)}
 #scrim{position:absolute; inset:0; background:var(--scrim)}
 @keyframes f1{0%,100%{transform:translate(0,0) scale(1)}50%{transform:translate(140px,-90px) scale(1.25)}}
@@ -51,8 +49,9 @@ body{
 
 nav{position:sticky; top:16px; z-index:40; display:flex; justify-content:center; padding:16px 22px 0}
 .navpill{display:flex; align-items:center; gap:22px; padding:11px 22px; border-radius:999px;
-  background:var(--g1); backdrop-filter:blur(22px) saturate(165%); -webkit-backdrop-filter:blur(22px) saturate(165%);
-  border:1px solid var(--line); box-shadow:inset 0 1px 0 var(--hi),0 12px 34px rgba(0,0,0,.22);
+  background:linear-gradient(135deg,rgba(255,252,249,.94),rgba(255,247,241,.88));
+  backdrop-filter:blur(30px) saturate(180%); -webkit-backdrop-filter:blur(30px) saturate(180%);
+  border:1px solid var(--line); box-shadow:inset 0 1px 0 rgba(255,255,255,.95),0 14px 38px rgba(140,50,22,.16);
   font-family:var(--font-mono),monospace; font-size:12px; color:var(--muted); max-width:100%; overflow-x:auto}
 .navpill a{color:var(--muted); text-decoration:none; white-space:nowrap; transition:color .18s}
 .navpill a:hover{color:var(--ink)}
